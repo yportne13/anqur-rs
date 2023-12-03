@@ -1,0 +1,12 @@
+[package]
+name = "anqur-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nom = "7.1"
+nom_locate = "4.2"
+nom-greedyerror      = "0.5"
+str-concat           = "0.2"
