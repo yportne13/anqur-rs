@@ -1,4 +1,5 @@
 
+#[derive(Debug, Clone)]
 pub struct Param(pub Vec<Id>, pub Box<Expr>);
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
@@ -13,6 +14,7 @@ pub struct Locate {
 /// | 'print' param* ':' expr ARROW2 expr # printDecl
 /// | 'data' ID param* consDecl* # dataDecl
 /// ;
+#[derive(Debug, Clone)]
 pub enum Decl {
     Def {
         name: Id,//TODO:DefVar
@@ -33,20 +35,24 @@ pub enum Decl {
 }
 
 /// fnBody : ARROW2 expr | clause*;
+#[derive(Debug, Clone)]
 pub enum FnBody {
     Expr(Expr),
     Clause(Vec<Clause>),
 }
 
 /// pattern : ID | '(' ID pattern* ')';
+#[derive(Debug, Clone)]
 pub enum Pattern {
     Id(Id),
     Pat(Id, Vec<Pattern>),
 }
 
 /// clause : '|' pattern+ ARROW2 expr;
+#[derive(Debug, Clone)]
 pub struct Clause(pub Vec<Pattern>, pub Expr);
 
+#[derive(Debug, Clone)]
 pub struct ConsDecl {
     pub name: Id,
     pub tele: Vec<Param>
@@ -55,6 +61,7 @@ pub struct ConsDecl {
 #[derive(Clone, Debug)]
 pub struct Id(pub String, pub Locate);
 
+#[derive(Debug, Clone)]
 pub enum Expr {
     // Elimination lures
     Two(Box<Expr>, Box<Expr>),

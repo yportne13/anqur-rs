@@ -1,7 +1,7 @@
 
 pub mod ast;
 
-use nom::{bytes::complete::*, combinator::*, error::ErrorKind, character::complete::multispace0, branch::alt, multi::{many1, many0}, sequence::tuple};
+use nom::{bytes::complete::*, combinator::*, error::{ErrorKind, make_error}, character::complete::multispace0, branch::alt, multi::{many1, many0}, sequence::tuple, Err};
 use nom_greedyerror::GreedyError;
 
 use self::ast::{Locate, Id, Expr, Param, ConsDecl, Pattern, Clause, FnBody, Decl};
@@ -88,9 +88,11 @@ fn cons_decl(s: Span) -> IResult<Span, ConsDecl> {
 
 fn expr(s: Span) -> IResult<Span, Expr> {
     alt((
-        map(tuple((expr_core, expr_core)), |(e0, e1)| Expr::Two(Box::new(e0), Box::new(e1))),
-        map(tuple((expr_core, tag(".1"))), |(expr, _)| Expr::Fst(Box::new(expr))),
-        map(tuple((expr_core, tag(".2"))), |(expr, _)| Expr::Snd(Box::new(expr))),
+        map(tuple((expr_core, expr)), |(e0, e1)| Expr::Two(Box::new(e0), Box::new(e1))),
+        map(tuple((expr_core, ws(tag(".1")))), |(expr, _)| Expr::Fst(Box::new(expr))),
+        map(tuple((expr_core, ws(tag(".2")))), |(expr, _)| Expr::Snd(Box::new(expr))),
+        map(tuple((expr_core, arrow, expr)), |(e0, _, e1)| Expr::Arrow(Box::new(e0), Box::new(e1))),
+        map(tuple((expr_core, times, expr)), |(e0, _, e1)| Expr::Times(Box::new(e0), Box::new(e1))),
         expr_core,
         /*map(many1(tuple((arrow, expr_core))), |v| ),
         map(many0(tuple((times, expr_core))), |v| if v.is_empty() {
@@ -157,14 +159,18 @@ fn param(s: Span) -> IResult<Span, Param> {
 pub fn id(s: Span) -> IResult<Span, Id> {
     //TODO: '-'
     let (s, a) = is_a("[~!@#$%^&*+=<>?/|abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")(s)?;
-    let (s, b) = opt(is_a("[~!@#$%^&*+=<>?/|abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))(s)?;
+    let (s, b) = opt(is_a("[~!@#$%^&*+'-=<>?/|abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))(s)?;
     let (s, _) = multispace0(s)?;
     let a = if let Some(b) = b {
         concat(a, b).unwrap()
     } else {
         a
     };
-    Ok((s, Id(a.fragment().to_string(), into_locate(a))))
+    if matches!(a.fragment(), &"=>" | &"->" | &"**" | &"|" | &"Pi" | &"Sig" | &"def" | &"data" | &"print" | &"U" | &"Type") {
+        Err(Err::Error(make_error(s, ErrorKind::Fix)))
+    } else {
+        Ok((s, Id(a.fragment().to_string(), into_locate(a))))
+    }
 }
 
 pub(crate) fn ws<'a, O, F>(
@@ -202,7 +208,48 @@ pub(crate) fn into_locate(s: Span) -> Locate {
 
 #[test]
 fn test() {
-    let s = "abcd efgh";
-    let s = Span::new(s);
-    println!("{:?}", id(s))
+    let s = r"def uncurry (A B C : U)
+        (t : A ** B) (f : A -> B -> C) : C => f (t.1) (t.2)
+      def uncurry' (A : U) (t : A ** A) (f : A -> A -> A) : A => uncurry A A A t f";
+    println!("{}", parser(s).is_ok());
+    let s = r"def Eq (A : U) (a b : A) : U => Pi (P : A -> U) -> P a -> P b
+      def refl (A : U) (a : A) : Eq A a a => \\P pa. pa
+      def sym (A : U) (a b : A) (e : Eq A a b) : Eq A b a =>
+          e (\\b. Eq A b a) (refl A a)";
+    println!("{}", parser(s).is_ok());
+    let s = r"data Unit | unit
+      def unnit : Unit => unit
+      data Nat
+      | zero
+      | succ (n : Nat)
+
+      def two : Nat => succ (succ zero)
+      print : Nat => two
+
+      data List (A : U)
+      | nil
+      | cons (x : A) (xs : List A)
+
+      def lengthTwo (A : U) (a : A) : List A => cons A a (cons A a (nil A))
+      print : List Nat => lengthTwo Nat two";
+    println!("{}", parser(s).is_ok());
+    let s = r"data Nat
+      | zero
+      | succ (n : Nat)
+
+      def plus (a : Nat) (b : Nat) : Nat
+      | zero b => b
+      | (succ a) b => succ (plus a b)
+
+      def two : Nat => succ (succ zero)
+      def four : Nat => plus two two
+      def six : Nat => plus four two
+      print : Nat => six";
+    println!("{}", parser(s).is_ok());
+    let s = r"data Nat
+      | zero
+      | succ (n : Nat)
+      def plus-bad (a : Nat) (b : Nat) : Nat
+      | (succ a) b => succ (plus-bad a b)";
+    println!("{}", parser(s).is_ok());
 }
