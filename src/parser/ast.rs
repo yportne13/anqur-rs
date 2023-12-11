@@ -1,6 +1,8 @@
+use crate::syntax::defvar::DefVar;
+
 
 #[derive(Debug, Clone)]
-pub struct Param(pub Vec<Id>, pub Box<Expr>);
+pub struct Param<T>(pub Id, pub Box<T>);
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 pub struct Locate {
@@ -17,21 +19,33 @@ pub struct Locate {
 #[derive(Debug, Clone)]
 pub enum Decl {
     Def {
-        name: Id,//TODO:DefVar
-        tele: Vec<Param>,
+        name: Id,
+        tele: Vec<Param<Expr>>,
         result: Expr,
         body: FnBody,
     },
     Print{
-        tele: Vec<Param>,
+        tele: Vec<Param<Expr>>,
         result: Expr,
         body: Expr,
     },
     Data{
-        name: Id,//TODO:DefVar
-        tele: Vec<Param>,
+        name: Id,
+        tele: Vec<Param<Expr>>,
         cons: Vec<ConsDecl>,
     },
+}
+
+impl Decl {
+    pub fn tele(&self) -> &[Param<Expr>] {
+        match self {
+            Decl::Def { name: _, tele, result: _, body: _ }
+                | Decl::Print { tele, result: _, body: _ }
+                | Decl::Data { name: _, tele, cons: _ } => {
+                    tele
+                },
+        }
+    }
 }
 
 /// fnBody : ARROW2 expr | clause*;
@@ -55,7 +69,7 @@ pub struct Clause(pub Vec<Pattern>, pub Expr);
 #[derive(Debug, Clone)]
 pub struct ConsDecl {
     pub name: Id,
-    pub tele: Vec<Param>
+    pub tele: Vec<Param<Expr>>
 }
 
 #[derive(Clone, Debug)]
@@ -72,8 +86,8 @@ pub enum Expr {
     Univ,
     Arrow(Box<Expr>, Box<Expr>),
     Times(Box<Expr>, Box<Expr>),
-    Pi(Param, Box<Expr>),
-    Sig(Param, Box<Expr>),
+    Pi(Param<Expr>, Box<Expr>),
+    Sig(Param<Expr>, Box<Expr>),
 
     // Introduction lures
     Lam(Vec<Id>, Box<Expr>),

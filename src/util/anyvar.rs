@@ -4,6 +4,7 @@ pub trait AnyVar {
     fn name(&self) -> &str;
 }
 
+#[derive(Clone, Debug)]
 pub struct LocalVar {
     name: String
 }

@@ -35,15 +35,15 @@ fn decl(s: Span) -> IResult<Span, Decl> {
     alt((
         map(
             tuple((ws(tag("def")), id, many0(param), ws(tag(":")), expr, fn_body)),
-            |(_, name, tele, _, result, body)| Decl::Def{name, tele, result, body}
+            |(_, name, tele, _, result, body)| Decl::Def{name, tele: tele.concat(), result, body}
         ),
         map(
             tuple((ws(tag("print")), many0(param), ws(tag(":")), expr, arrow2, expr)),
-            |(_, tele, _, result, _, body)| Decl::Print{tele, result, body},
+            |(_, tele, _, result, _, body)| Decl::Print{tele: tele.concat(), result, body},
         ),
         map(
             tuple((ws(tag("data")), id, many0(param), many0(cons_decl))),
-            |(_, name, tele, cons)| Decl::Data{name, tele, cons}
+            |(_, name, tele, cons)| Decl::Data{name, tele: tele.concat(), cons}
         )
     ))(s)
 }
@@ -83,7 +83,7 @@ fn cons_decl(s: Span) -> IResult<Span, ConsDecl> {
         ws(tag("|")),
         id,
         many0(param),
-    )), |(_, name, tele)| ConsDecl{name, tele})(s)
+    )), |(_, name, tele)| ConsDecl{name, tele: tele.concat()})(s)
 }
 
 fn expr(s: Span) -> IResult<Span, Expr> {
@@ -108,8 +108,14 @@ pub fn expr_core(s: Span) -> IResult<Span, Expr> {
     alt((
         map(ws(tag("U")), |_| Expr::Univ),
         map(ws(tag("Type")), |_| Expr::Univ),
-        map(tuple((pi, param, arrow, expr)), |(_, param, _, expr)| Expr::Pi(param, Box::new(expr))),
-        map(tuple((sig, param, arrow, expr)), |(_, param, _, expr)| Expr::Sig(param, Box::new(expr))),
+        map(tuple((pi, param, arrow, expr)), |(_, param, _, expr)| {
+            param.into_iter()
+                .fold(expr, |e, p| Expr::Pi(p, Box::new(e)))
+        }),
+        map(tuple((sig, param, arrow, expr)), |(_, param, _, expr)| {
+            param.into_iter()
+                .fold(expr, |e, p| Expr::Sig(p, Box::new(e)))
+        }),
         map(tuple((lam, many1(id), ws(tag(".")), expr)), |(_, param, _, expr)| Expr::Lam(param, Box::new(expr))),
         map(tuple((ws(tag("<<")), expr, ws(tag(",")), expr, ws(tag(">>")))), |(_, e0, _, e1, _)| Expr::Pair(Box::new(e0), Box::new(e1))),
         map(id, Expr::Ref),
@@ -147,13 +153,13 @@ fn pi(s: Span) -> IResult<Span, ()> {
     Ok((s, ()))
 }
 
-fn param(s: Span) -> IResult<Span, Param> {
+fn param(s: Span) -> IResult<Span, Vec<Param<Expr>>> {
     let (s, _) = ws(tag("("))(s)?;
     let (s, x) = many1(id)(s)?;
     let (s, _) = ws(tag(":"))(s)?;
     let (s, expr) = expr(s)?;
     let (s, _) = ws(tag(")"))(s)?;
-    Ok((s, Param(x, Box::new(expr))))
+    Ok((s, x.into_iter().map(|y| Param(y, Box::new(expr.clone()))).collect()))
 }
 
 pub fn id(s: Span) -> IResult<Span, Id> {
