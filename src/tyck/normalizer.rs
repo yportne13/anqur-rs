@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use crate::{util::anyvar::LocalVar, syntax::term::Term};
+use crate::syntax::term::Term;
 
-
+use super::elaborator::LocalVar;
 
 pub struct Normalizer(pub HashMap<LocalVar, Term>);
 
 impl Normalizer {
-    pub fn term(term: Term) -> Term {
+    pub fn term(&self, term: &Term) -> Term {
         match term {
             Term::Error { msg } => todo!(),
             Term::Ref { var } => todo!(),

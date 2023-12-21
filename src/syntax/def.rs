@@ -1,29 +1,29 @@
 use crate::parser::ast::{Param, Expr, Clause};
 
-use super::{term::Term, defvar::DefVar};
+use super::{term::{Term, ParamTerm}, defvar::DefVar};
 
 
 #[derive(Clone, Debug)]
 pub enum Def {
     Fn {
         name: Box<DefVar>,
-        telescope: Vec<Param<Term>>,
+        telescope: Vec<ParamTerm>,
         result: Term,
         body: Result<Term, Vec<Clause>>,
     },
     Data {
         name: Box<DefVar>,
-        telescope: Vec<Param<Term>>,
+        telescope: Vec<ParamTerm>,
         cons: Vec<Def>,
     },
     Cons {
         //TODO:name: Box<DefVar>,
         name: String,
         owner: Box<DefVar>,
-        tele: Vec<Param<Expr>>,//TODO:should be Param<Term>
+        tele: Vec<ParamTerm>,
     },
     Print {
-        telescope: Vec<Param<Term>>,
+        telescope: Vec<ParamTerm>,
         result: Term,
         body: Term,
     }
@@ -32,6 +32,6 @@ pub enum Def {
 #[derive(Clone, Debug)]
 pub struct Signature {
     pub is_data: bool,
-    pub telescope: Vec<Param<Term>>,
+    pub telescope: Vec<ParamTerm>,
     pub result: Term,
 }

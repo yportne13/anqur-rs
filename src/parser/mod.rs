@@ -91,8 +91,16 @@ fn expr(s: Span) -> IResult<Span, Expr> {
         map(tuple((expr_core, expr)), |(e0, e1)| Expr::Two(Box::new(e0), Box::new(e1))),
         map(tuple((expr_core, ws(tag(".1")))), |(expr, _)| Expr::Fst(Box::new(expr))),
         map(tuple((expr_core, ws(tag(".2")))), |(expr, _)| Expr::Snd(Box::new(expr))),
-        map(tuple((expr_core, arrow, expr)), |(e0, _, e1)| Expr::Arrow(Box::new(e0), Box::new(e1))),
-        map(tuple((expr_core, times, expr)), |(e0, _, e1)| Expr::Times(Box::new(e0), Box::new(e1))),
+        map(tuple((expr_core, arrow, expr)), |(e0, _, e1)| Expr::Dt(
+            true,
+            Param(Id("_".to_owned(), Locate::default()), Box::new(e0)),
+            Box::new(e1)
+        )),
+        map(tuple((expr_core, times, expr)), |(e0, _, e1)| Expr::Dt(
+            false,
+            Param(Id("_".to_owned(), Locate::default()), Box::new(e0)),
+            Box::new(e1)
+        )),
         expr_core,
         /*map(many1(tuple((arrow, expr_core))), |v| ),
         map(many0(tuple((times, expr_core))), |v| if v.is_empty() {
@@ -110,13 +118,16 @@ pub fn expr_core(s: Span) -> IResult<Span, Expr> {
         map(ws(tag("Type")), |_| Expr::Univ),
         map(tuple((pi, param, arrow, expr)), |(_, param, _, expr)| {
             param.into_iter()
-                .fold(expr, |e, p| Expr::Pi(p, Box::new(e)))
+                .fold(expr, |e, p| Expr::Dt(true, p, Box::new(e)))
         }),
         map(tuple((sig, param, arrow, expr)), |(_, param, _, expr)| {
             param.into_iter()
-                .fold(expr, |e, p| Expr::Sig(p, Box::new(e)))
+                .fold(expr, |e, p| Expr::Dt(false, p, Box::new(e)))
         }),
-        map(tuple((lam, many1(id), ws(tag(".")), expr)), |(_, param, _, expr)| Expr::Lam(param, Box::new(expr))),
+        map(tuple((lam, many1(id), ws(tag(".")), expr)), |(_, param, _, expr)| {
+            param.into_iter()
+                .fold(expr, |e, p| Expr::Lam(p, Box::new(e)))
+        }),
         map(tuple((ws(tag("<<")), expr, ws(tag(",")), expr, ws(tag(">>")))), |(_, e0, _, e1, _)| Expr::Pair(Box::new(e0), Box::new(e1))),
         map(id, Expr::Ref),
         map(tuple((ws(tag("(")), expr, ws(tag(")")))), |(_, expr, _)| Expr::Paren(Box::new(expr))),
@@ -153,7 +164,7 @@ fn pi(s: Span) -> IResult<Span, ()> {
     Ok((s, ()))
 }
 
-fn param(s: Span) -> IResult<Span, Vec<Param<Expr>>> {
+fn param(s: Span) -> IResult<Span, Vec<Param>> {
     let (s, _) = ws(tag("("))(s)?;
     let (s, x) = many1(id)(s)?;
     let (s, _) = ws(tag(":"))(s)?;
