@@ -1,7 +1,7 @@
-use crate::syntax::defvar::DefVar;
+use std::fmt::Debug;
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Param(pub Id, pub Box<Expr>);
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
@@ -9,6 +9,18 @@ pub struct Locate {
     pub offset: usize,
     pub line: u32,
     pub len: usize,
+}
+
+impl std::ops::Add for Locate {
+    type Output = Locate;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            offset: self.offset,
+            line: self.line,
+            len: rhs.offset + rhs.len - self.offset,
+        }
+    }
 }
 
 /// decl
@@ -52,19 +64,34 @@ impl Decl {
 #[derive(Debug, Clone)]
 pub enum FnBody {
     Expr(Expr),
-    Clause(Vec<Clause>),
+    Clause(Vec<Clause<Expr>>),
 }
 
 /// pattern : ID | '(' ID pattern* ')';
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     Id(Id),
     Pat(Id, Vec<Pattern>),
 }
 
+impl Pattern {
+    pub fn name(&self) -> &Id {
+        match self {
+            Pattern::Id(x) => x,
+            Pattern::Pat(x, _) => x,
+        }
+    }
+    pub fn pats(&self) -> &[Pattern] {
+        match self {
+            Pattern::Id(_) => &[],
+            Pattern::Pat(_, x) => x,
+        }
+    }
+}
+
 /// clause : '|' pattern+ ARROW2 expr;
-#[derive(Debug, Clone)]
-pub struct Clause(pub Vec<Pattern>, pub Expr);
+#[derive(Debug, Clone, PartialEq)]
+pub struct Clause<T>(pub Vec<Pattern>, pub T);
 
 #[derive(Debug, Clone)]
 pub struct ConsDecl {
@@ -72,10 +99,16 @@ pub struct ConsDecl {
     pub tele: Vec<Param>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq)]
 pub struct Id(pub String, pub Locate);
 
-#[derive(Debug, Clone)]
+impl Debug for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Id \"{}\" @ offset {}, line {}, len: {}", self.0, self.1.offset, self.1.line, self.1.len)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     // Elimination lures
     Two(Box<Expr>, Box<Expr>),
@@ -94,11 +127,23 @@ pub enum Expr {
 
     // Others
     Ref(Id),
+    RefResolved(Id),
     Paren(Box<Expr>),
 }
 
 impl Expr {
     pub fn pos(&self) -> Locate {
-        todo!()
+        match self {
+            Expr::Two(a, b) => a.pos() + b.pos(),
+            Expr::Fst(a) => a.pos(),
+            Expr::Snd(a) => a.pos(),
+            Expr::Univ => Locate::default(),//TODO:
+            Expr::Dt(_, p, _) => p.0.1,
+            Expr::Lam(id, _) => id.1,
+            Expr::Pair(a, b) => a.pos() + b.pos(),
+            Expr::Ref(id) => id.1,
+            Expr::RefResolved(id) => id.1,
+            Expr::Paren(a) => a.pos(),
+        }
     }
 }

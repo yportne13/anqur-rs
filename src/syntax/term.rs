@@ -4,14 +4,14 @@ use crate::{parser::ast::{Param, Expr, Locate}, tyck::{normalizer::Normalizer, e
 
 use super::defvar::DefVar;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ParamTerm {
     pub id: LocalVar,
     pub ty: Box<Term>,
     pub loc: Locate,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Term {
     Error{msg: String},
     Ref{var: LocalVar},
@@ -36,8 +36,24 @@ impl Term {
     }
     pub fn codomain(&self, term: Term) -> Term {
         match self {
-            Term::DT { is_pi, param, cod } => todo!(),
+            Term::DT { is_pi: _, param, cod: _ } => {
+                Normalizer(std::iter::once((param.id, term.clone())).collect())
+                    .term(&term)
+            },
             _ => unreachable!(),
         }
+    }
+    pub fn app(&self, args: Vec<Term>) -> Term {
+        args.into_iter()
+            .fold(self.clone(), |t, a| {
+                match t {
+                    Term::Lam { x , body } => {
+                        body.subst(x, a.clone())
+                    },
+                    _ => {
+                        Term::Two { is_app: true, f: Box::new(t), a: Box::new(a.clone()) }
+                    }
+                }
+            })
     }
 }

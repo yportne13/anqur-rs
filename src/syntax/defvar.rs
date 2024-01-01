@@ -4,7 +4,7 @@ use super::def::{Def, Signature};
 
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DefVar {
     pub core: Option<Def>,
     pub signature: Signature,

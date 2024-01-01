@@ -1,4 +1,8 @@
-use parser::ast::Locate;
+use std::collections::HashMap;
+
+use parser::{ast::Locate, parser};
+
+use crate::tyck::{elaborator::Elaborator, resolver::Resolver};
 
 pub mod parser;
 pub mod syntax;
@@ -7,6 +11,7 @@ pub mod tyck;
 
 type Error = Diagnostic;
 
+#[derive(Clone, Debug)]
 pub struct Diagnostic {
     pos: Locate,
     msg: String,
@@ -14,4 +19,73 @@ pub struct Diagnostic {
 
 fn main() {
     println!("Hello, world!");
+}
+
+fn run(s: &str) {
+    let mut elaborator = Elaborator {
+        name_id: HashMap::new(),
+        unnamed_num: 0,
+        sigma: HashMap::new(),
+        gamma: HashMap::new(),
+    };
+    let decl = parser(s).unwrap();
+    let mut edj = Resolver { env: HashMap::new() };
+    let mut resolve_decl = vec![];
+    for d in decl {
+        resolve_decl.push(edj.def(&d).unwrap());
+    }
+    println!("{:#?}", resolve_decl);
+    for mut dec in resolve_decl {
+        let x = elaborator.def(&mut dec).unwrap();
+        println!("{:?}", x);
+    }
+    println!("{:?}", elaborator)
+}
+
+#[test]
+fn test() {
+    let s = r"def uncurry (A B C : U)
+        (t : A ** B) (f : A -> B -> C) : C => f (t.1) (t.2)
+      def uncurry' (A : U) (t : A ** A) (f : A -> A -> A) : A => uncurry A A A t f";
+    run(s);
+    let s = r"def Eq (A : U) (a b : A) : U => Pi (P : A -> U) -> P a -> P b
+      def refl (A : U) (a : A) : Eq A a a => \\P pa. pa
+      def sym (A : U) (a b : A) (e : Eq A a b) : Eq A b a =>
+          e (\\b. Eq A b a) (refl A a)";
+    run(s);
+    let s = r"data Unit | unit
+      def unnit : Unit => unit
+      data Nat
+      | zero
+      | succ (n : Nat)
+
+      def two : Nat => succ (succ zero)
+      print : Nat => two
+
+      data List (A : U)
+      | nil
+      | cons (x : A) (xs : List A)
+
+      def lengthTwo (A : U) (a : A) : List A => cons A a (cons A a (nil A))
+      print : List Nat => lengthTwo Nat two";
+    run(s);
+    let s = r"data Nat
+      | zero
+      | succ (n : Nat)
+
+      def plus (a : Nat) (b : Nat) : Nat
+      | zero b => b
+      | (succ a) b => succ (plus a b)
+
+      def two : Nat => succ (succ zero)
+      def four : Nat => plus two two
+      def six : Nat => plus four two
+      print : Nat => six";
+    run(s);
+    let s = r"data Nat
+      | zero
+      | succ (n : Nat)
+      def plus-bad (a : Nat) (b : Nat) : Nat
+      | (succ a) b => succ (plus-bad a b)";
+    run(s);
 }

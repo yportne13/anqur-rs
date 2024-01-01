@@ -3,13 +3,13 @@ use crate::parser::ast::{Param, Expr, Clause};
 use super::{term::{Term, ParamTerm}, defvar::DefVar};
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Def {
     Fn {
         name: Box<DefVar>,
         telescope: Vec<ParamTerm>,
         result: Term,
-        body: Result<Term, Vec<Clause>>,
+        body: Result<Term, Vec<Clause<Term>>>,
     },
     Data {
         name: Box<DefVar>,
@@ -29,7 +29,7 @@ pub enum Def {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Signature {
     pub is_data: bool,
     pub telescope: Vec<ParamTerm>,

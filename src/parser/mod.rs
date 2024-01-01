@@ -70,7 +70,7 @@ fn pattern(s: Span) -> IResult<Span, Pattern> {
 }
 
 /// clause : '|' pattern+ ARROW2 expr;
-fn clause(s: Span) -> IResult<Span, Clause> {
+fn clause(s: Span) -> IResult<Span, Clause<Expr>> {
     let (s, _) = ws(tag("|"))(s)?;
     let (s, patterns) = many1(pattern)(s)?;
     let (s, _) = arrow2(s)?;
@@ -88,7 +88,8 @@ fn cons_decl(s: Span) -> IResult<Span, ConsDecl> {
 
 fn expr(s: Span) -> IResult<Span, Expr> {
     alt((
-        map(tuple((expr_core, expr)), |(e0, e1)| Expr::Two(Box::new(e0), Box::new(e1))),
+        map(tuple((expr_core, many1(expr_core))), |(e0, e1)| e1.into_iter()
+            .fold(e0, |e0, e1i| Expr::Two(Box::new(e0), Box::new(e1i)))),
         map(tuple((expr_core, ws(tag(".1")))), |(expr, _)| Expr::Fst(Box::new(expr))),
         map(tuple((expr_core, ws(tag(".2")))), |(expr, _)| Expr::Snd(Box::new(expr))),
         map(tuple((expr_core, arrow, expr)), |(e0, _, e1)| Expr::Dt(
