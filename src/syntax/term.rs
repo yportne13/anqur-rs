@@ -36,9 +36,9 @@ impl Term {
     }
     pub fn codomain(&self, term: Term) -> Term {
         match self {
-            Term::DT { is_pi: _, param, cod: _ } => {
+            Term::DT { is_pi: _, param, cod } => {
                 Normalizer(std::iter::once((param.id, term.clone())).collect())
-                    .term(&term)
+                    .term(cod)
             },
             _ => unreachable!(),
         }

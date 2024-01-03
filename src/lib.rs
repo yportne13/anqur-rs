@@ -37,7 +37,16 @@ fn run(s: &str) {
     println!("{:#?}", resolve_decl);
     for mut dec in resolve_decl {
         let x = elaborator.def(&mut dec).unwrap();
-        println!("{:?}", x);
+        match &x {
+            syntax::def::Def::Fn { name, telescope, result: _, body: _ }
+            | syntax::def::Def::Data { name, telescope, cons: _ } => {
+                elaborator.sigma.insert(name.name.clone(), x);
+            },
+            syntax::def::Def::Cons { name, owner, tele } => todo!(),
+            syntax::def::Def::Print { telescope, result, body } => {
+                println!("{:?}", x);
+            },
+        }
     }
     println!("{:?}", elaborator)
 }

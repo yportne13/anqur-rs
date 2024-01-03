@@ -16,7 +16,7 @@ pub type LocalVar = u32;
 pub struct Elaborator {
     pub name_id: HashMap<String, LocalVar>,
     pub unnamed_num: u32,
-    pub sigma: HashMap<String, String>,
+    pub sigma: HashMap<String, Def>,
     pub gamma: HashMap<LocalVar, Term>,
 }
 
@@ -93,18 +93,18 @@ impl Elaborator {
                         pos: x.1,
                         msg: format!("error ref: {}", x.0),
                     })?;
-                let ty = self.gamma.get(localvar)
+                let mut ty = self.gamma.get(localvar)
                     .ok_or(Diagnostic {
                         pos: x.1,
                         msg: format!("error ref ty: {}", x.0),
                     })?;
                 ///////////////
-                /*while let Term::Ref { var } = ty {
+                while let Term::Ref { var } = ty {
                     ty = self.gamma.get(var).ok_or(Diagnostic {
                         pos: x.1,
                         msg: format!("error ref ty: {}", x.0),
                     })?;
-                }*/
+                }
                 ///////////////
                 Synth {
                     well_typed: Term::Ref { var: *localvar },
@@ -114,13 +114,7 @@ impl Elaborator {
             Expr::Fst(x) => {
                 let t = self.synth(x)?;
                 if let Term::DT { is_pi: false, param, cod: _ } = t.ty {
-                    let mut ty = param.ty.as_ref();
-                    while let Term::Ref { var } = ty {
-                        ty = self.gamma.get(var).ok_or(Diagnostic {
-                            pos: x.pos(),
-                            msg: format!("error ref ty: {}", var),
-                        })?;
-                    }
+                    let ty = param.ty.as_ref();
                     Synth {
                         well_typed: Term::Proj { t: Box::new(t.well_typed), is_one: true },
                         ty: ty.clone(),
@@ -134,17 +128,10 @@ impl Elaborator {
             },
             Expr::Snd(x) => {
                 let t = self.synth(x)?;
-                if let Term::DT { is_pi: false, param, cod: _ } = t.ty {
-                    let mut ty = param.ty.as_ref();
-                    while let Term::Ref { var } = ty {
-                        ty = self.gamma.get(var).ok_or(Diagnostic {
-                            pos: x.pos(),
-                            msg: format!("error ref ty: {}", var),
-                        })?;
-                    }
+                if let Term::DT { is_pi: false, param: _, cod: _ } = &t.ty {
                     Synth {
-                        well_typed: Term::Proj { t: Box::new(t.well_typed), is_one: false },
-                        ty: ty.clone(),
+                        well_typed: Term::Proj { t: Box::new(t.well_typed.clone()), is_one: false },
+                        ty: t.ty.clone().codomain(Term::Proj { t: Box::new(t.well_typed), is_one: true }),
                     }
                 } else {
                     return Err(Diagnostic {

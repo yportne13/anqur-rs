@@ -115,8 +115,6 @@ fn expr(s: Span) -> IResult<Span, Expr> {
 
 pub fn expr_core(s: Span) -> IResult<Span, Expr> {
     alt((
-        map(ws(tag("U")), |_| Expr::Univ),
-        map(ws(tag("Type")), |_| Expr::Univ),
         map(tuple((pi, param, arrow, expr)), |(_, param, _, expr)| {
             param.into_iter()
                 .fold(expr, |e, p| Expr::Dt(true, p, Box::new(e)))
@@ -131,6 +129,8 @@ pub fn expr_core(s: Span) -> IResult<Span, Expr> {
         }),
         map(tuple((ws(tag("<<")), expr, ws(tag(",")), expr, ws(tag(">>")))), |(_, e0, _, e1, _)| Expr::Pair(Box::new(e0), Box::new(e1))),
         map(id, Expr::Ref),
+        map(ws(tag("U")), |_| Expr::Univ),
+        map(ws(tag("Type")), |_| Expr::Univ),
         map(tuple((ws(tag("(")), expr, ws(tag(")")))), |(_, expr, _)| Expr::Paren(Box::new(expr))),
     ))(s)
 }
