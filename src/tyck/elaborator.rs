@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::{Debug, Display}};
 
 use crate::{parser::ast::{Decl, Expr, Param, Clause, Locate}, syntax::{def::{Def, Signature}, term::{Term, ParamTerm}, defvar::DefVar}, Error, Diagnostic};
 
-use super::unifier::untyped;
+use super::{unifier::untyped, normalizer::Renamer};
 
 #[derive(Clone, Debug)]
 pub struct Synth {
@@ -10,14 +10,37 @@ pub struct Synth {
     pub ty: Term,
 }
 
-pub type LocalVar = u32;
+//pub type LocalVar = u32;
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LocalVar {
+    pub id: u32,
+    pub name: char,
+}
+
+impl Display for LocalVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.name, self.id)
+    }
+}
+
+impl Debug for LocalVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.name, self.id)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum LR {
+    L(LocalVar),
+    R(LocalVar),
+}
 
 #[derive(Clone, Debug)]
 pub struct Elaborator {
     pub name_id: HashMap<String, LocalVar>,
     pub unnamed_num: u32,
     pub sigma: HashMap<String, Def>,
-    pub gamma: HashMap<LocalVar, Term>,
+    pub gamma: HashMap<LR, Term>,
 }
 
 fn normalize(term: &Term) -> Term {
@@ -31,14 +54,14 @@ impl Elaborator {
                 if let dt @ Term::DT { is_pi: true, param, cod: _ } = &normalize(ty) {
                     let len = self.name_id.len() as u32 + self.unnamed_num;
                     let id = self.name_id.entry(x.0.to_owned())//TODO
-                        .or_insert(len);
-                    self.gamma.insert(*id, *param.ty.clone());
+                        .or_insert(LocalVar { id: len, name: x.0.chars().next().unwrap() });
+                    self.gamma.insert(LR::L(*id), *param.ty.clone());
                     let id = *id;
                     let body = self.inherit(
                         a,
                         &dt.codomain(Term::Ref { var: id })
                     )?;
-                    self.gamma.remove(&id);
+                    self.gamma.remove(&LR::L(id));
                     Ok(Term::Lam { x: id, body: Box::new(body) })
                 } else {
                     Err(Diagnostic {
@@ -88,27 +111,52 @@ impl Elaborator {
             },
             Expr::RefResolved(x) => {
                 //TODO:maybe wrong
-                let localvar = self.name_id.get(&x.0)
-                    .ok_or(Diagnostic {
-                        pos: x.1,
-                        msg: format!("error ref: {}", x.0),
-                    })?;
-                let mut ty = self.gamma.get(localvar)
-                    .ok_or(Diagnostic {
-                        pos: x.1,
-                        msg: format!("error ref ty: {}", x.0),
-                    })?;
-                ///////////////
-                while let Term::Ref { var } = ty {
-                    ty = self.gamma.get(var).ok_or(Diagnostic {
-                        pos: x.1,
-                        msg: format!("error ref ty: {}", x.0),
-                    })?;
-                }
-                ///////////////
-                Synth {
-                    well_typed: Term::Ref { var: *localvar },
-                    ty: ty.clone()
+                if let Some(def) = self.sigma.get(&x.0) {
+                    match def {
+                        Def::Fn { name, telescope, result, body: _ } => {
+                            Synth {
+                                well_typed: Renamer(HashMap::new()).term(
+                                    &telescope.iter()
+                                        .map(|x| x.id)
+                                        .fold(
+                                            Term::FnCall {
+                                                fun: name.clone(),
+                                                args: telescope.iter().map(|x| Term::Ref { var: x.id }).collect()
+                                            },
+                                            |x, s| {
+                                                Term::Lam { x: s, body: Box::new(x) }
+                                            }
+                                        )
+                                ),
+                                ty: telescope.iter()
+                                    .rev()
+                                    .fold(
+                                        result.clone(),
+                                        |x, s| {
+                                            Term::DT { is_pi: true, param: s.clone(), cod: Box::new(x) }
+                                        }
+                                    ),
+                            }
+                        },
+                        Def::Data { name, telescope, cons } => todo!(),
+                        Def::Cons { name, owner, tele } => todo!(),
+                        Def::Print { .. } => unreachable!(),
+                    }
+                } else {
+                    let localvar = self.name_id.get(&x.0)
+                        .ok_or(Diagnostic {
+                            pos: x.1,
+                            msg: format!("error ref: {}", x.0),
+                        })?;
+                    let ty = self.gamma.get(&LR::L(*localvar))
+                        .ok_or(Diagnostic {
+                            pos: x.1,
+                            msg: format!("error ref ty: {}", x.0),
+                        })?;
+                    Synth {
+                        well_typed: Term::Ref { var: *localvar },
+                        ty: ty.clone()
+                    }
                 }
             },
             Expr::Fst(x) => {
@@ -144,9 +192,9 @@ impl Elaborator {
                 let f = self.synth(f)?;
                 match &f.ty {
                     dt @ Term::DT { is_pi: true, param, cod: _} => {
-                        self.gamma.insert(param.id, *param.ty.clone());
+                        self.gamma.insert(LR::R(param.id), *param.ty.clone());
                         let a = self.inherit(a, &param.ty)?;
-                        self.gamma.remove(&param.id);
+                        self.gamma.remove(&LR::R(param.id));
                         Synth {
                             well_typed: f.well_typed,
                             ty: dt.codomain(a),
@@ -170,7 +218,7 @@ impl Elaborator {
                     ty: Term::DT {
                         is_pi: false,
                         param: ParamTerm {
-                            id: self.name_id.len() as u32 + self.unnamed_num - 1,
+                            id: LocalVar { id: self.name_id.len() as u32 + self.unnamed_num - 1, name: '_' },
                             ty: Box::new(f.ty),
                             loc: f_pos
                         },
@@ -182,16 +230,22 @@ impl Elaborator {
                 let x = param.0.0.clone();
                 let param = self.synth(&param.1)?;
                 let id = if &x == "_" {
-                    self.name_id.len() as u32 + self.unnamed_num
+                    LocalVar {
+                        id: self.name_id.len() as u32 + self.unnamed_num,
+                        name: '_',
+                    }
                 } else {
                     let len = self.name_id.len() as u32;
-                    *self.name_id.entry(x)//TODO
-                        .or_insert(len + self.unnamed_num)
+                    *self.name_id.entry(x.clone())//TODO
+                        .or_insert(LocalVar {
+                            id: len + self.unnamed_num,
+                            name: x.chars().next().unwrap(),
+                        })
                 };
-                self.gamma.insert(id, param.well_typed.clone());
+                self.gamma.insert(LR::L(id), param.well_typed.clone());
                 self.unnamed_num += 1;
                 let cod = self.synth(cod)?;
-                self.gamma.remove(&id);
+                self.gamma.remove(&LR::L(id));
                 Synth {
                     well_typed: Term::DT {
                         is_pi: *is_pi,
@@ -234,14 +288,14 @@ impl Elaborator {
                     crate::parser::ast::FnBody::Clause(c) => Err(self.tyck_fun_body(&telescope, &result, c)?),
                 };
                 to_remove.iter()
-                    .for_each(|t| { self.gamma.remove(t); });
+                    .for_each(|t| { self.gamma.remove(&LR::L(*t)); });
                 Ok(Def::Fn { name: Box::new(defvar), telescope, result, body })
             },
             Decl::Print{tele: _, result, body} => {
                 let result = self.inherit(result, &Term::UI)?;
                 let body = self.inherit(body, &result)?;
                 to_remove.iter()
-                    .for_each(|t| { self.gamma.remove(t); });
+                    .for_each(|t| { self.gamma.remove(&LR::L(*t)); });
                 Ok(Def::Print { telescope, result, body })
             },
             //TODO: Decl::Cons => Err(e)
@@ -277,21 +331,24 @@ impl Elaborator {
         crate::tyck::classifier::classify(&clause, telescope)?;
         Ok(clause)
     }
-    pub fn telescope(&mut self, tele: &[Param]) -> Result<(Vec<ParamTerm>, Vec<u32>), Error> {
+    pub fn telescope(&mut self, tele: &[Param]) -> Result<(Vec<ParamTerm>, Vec<LocalVar>), Error> {
         let mut ret = vec![];
         let mut ids = vec![];
         for param in tele {
             let ty = self.inherit(&param.1, &Term::UI)?;
             let len = self.name_id.len() as u32 + self.unnamed_num;
             let id = self.name_id.entry(param.0.0.to_owned())
-                .or_insert(len);
+                .or_insert(LocalVar {
+                    id: len,
+                    name: param.0.0.chars().next().unwrap(),
+                });
             ret.push(ParamTerm {
                 id: *id,
                 ty: Box::new(ty.clone()),
                 loc: param.0.1,
             });
             ids.push(*id);
-            self.gamma.insert(*id, ty);//TODO: should be insert to gamma_temp
+            self.gamma.insert(LR::L(*id), ty);//TODO: should be insert to gamma_temp
         }
         Ok((ret, ids))
     }

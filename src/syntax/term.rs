@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::fmt::Debug;
 
-use crate::{parser::ast::{Param, Expr, Locate}, tyck::{normalizer::Normalizer, elaborator::LocalVar}};
+use crate::{parser::ast::Locate, tyck::{normalizer::Normalizer, elaborator::LocalVar}};
 
 use super::defvar::DefVar;
 
@@ -11,7 +11,7 @@ pub struct ParamTerm {
     pub loc: Locate,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Term {
     Error{msg: String},
     Ref{var: LocalVar},
@@ -23,6 +23,26 @@ pub enum Term {
     Lam{x: LocalVar, body: Box<Term>},
     DT{is_pi: bool, param: ParamTerm, cod: Box<Term>},
     UI,
+}
+
+impl Debug for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Term::Error{msg} => write!(f, "Error({})", msg),
+            Term::Ref{var} => write!(f, "Ref({:?})", var),
+            Term::FnCall{fun, args} => write!(f, "{}({:?})", fun.name, args),
+            Term::DataCall{fun, args} => write!(f, "{}({:?})", fun.name, args),
+            Term::ConCall{fun, args} => write!(f, "{}({:?})", fun.name, args),
+            Term::Two{is_app: true, f: fun, a} => write!(f, "({:?} {:?})", fun, a),
+            Term::Two{is_app: false, f: fun, a} => write!(f, "({:?} {:?})", fun, a),
+            Term::Proj { t, is_one: true } => write!(f, "Proj({:?})", t),
+            Term::Proj { t, is_one: false } => write!(f, "Proj({:?})", t),
+            Term::Lam { x, body } => write!(f, "Lam({:?}, {:?})", x, body),
+            Term::DT{is_pi: true, param, cod} => write!(f, "pi({:?}, {:?})", param.id, cod),
+            Term::DT{is_pi: false, param, cod} => write!(f, "si({:?}, {:?})", param.id, cod),
+            Term::UI => write!(f, "UI"),
+        }
+    }
 }
 
 impl Term {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use parser::{ast::Locate, parser};
 
@@ -11,10 +11,16 @@ pub mod tyck;
 
 type Error = Diagnostic;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Diagnostic {
     pos: Locate,
     msg: String,
+}
+
+impl Debug for Diagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\n -> {} {}", self.msg, self.pos.line, self.pos.len)
+    }
 }
 
 fn main() {
@@ -34,7 +40,7 @@ fn run(s: &str) {
     for d in decl {
         resolve_decl.push(edj.def(&d).unwrap());
     }
-    println!("{:#?}", resolve_decl);
+    //println!("{:#?}", resolve_decl);
     for mut dec in resolve_decl {
         let x = elaborator.def(&mut dec).unwrap();
         match &x {
@@ -47,21 +53,26 @@ fn run(s: &str) {
                 println!("{:?}", x);
             },
         }
+        elaborator.unnamed_num = 0;
+        elaborator.name_id.clear();
+        elaborator.gamma.clear();
     }
-    println!("{:?}", elaborator)
+    //println!("{:?}", elaborator)
 }
 
 #[test]
 fn test() {
     let s = r"def uncurry (A B C : U)
         (t : A ** B) (f : A -> B -> C) : C => f (t.1) (t.2)
-      def uncurry' (A : U) (t : A ** A) (f : A -> A -> A) : A => uncurry A A A t f";
+      def uncurry' (D : U) (t : D ** D) (f : D -> D -> D) : D => uncurry D D D t f";
     run(s);
+    println!("finish 1");
     let s = r"def Eq (A : U) (a b : A) : U => Pi (P : A -> U) -> P a -> P b
       def refl (A : U) (a : A) : Eq A a a => \\P pa. pa
       def sym (A : U) (a b : A) (e : Eq A a b) : Eq A b a =>
           e (\\b. Eq A b a) (refl A a)";
     run(s);
+    println!("finish 2");
     let s = r"data Unit | unit
       def unnit : Unit => unit
       data Nat

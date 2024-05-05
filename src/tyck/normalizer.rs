@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::syntax::term::Term;
+use crate::syntax::term::{ParamTerm, Term};
 
 use super::elaborator::LocalVar;
 
@@ -20,7 +20,7 @@ impl Normalizer {
                 Term::Lam { x: *x, body: Box::new(self.term(body)) }
             },
             Term::DT { is_pi, param, cod } => {
-                Term::DT { is_pi: *is_pi, param: param.clone(), cod: Box::new(self.term(cod)) }
+                Term::DT { is_pi: *is_pi, param: self.param(param), cod: Box::new(self.term(cod)) }
             },
             Term::Two { is_app, f, a } => {
                 let f = self.term(f);
@@ -84,20 +84,27 @@ impl Normalizer {
             Term::Error { msg } => Term::Error { msg: msg.clone() },
         }
     }
+    fn param(&mut self, param: &ParamTerm) -> ParamTerm {
+        ParamTerm {
+            id: param.id,
+            ty: Box::new(self.term(&param.ty)),
+            loc: param.loc,
+        }
+    }
 }
 
-struct Renamer(pub HashMap<LocalVar, LocalVar>);
+pub struct Renamer(pub HashMap<LocalVar, LocalVar>);
 
 impl Renamer {
     pub fn term(&mut self, term: &Term) -> Term {
         match term {
             Term::Lam { x, body } => {
-                Term::Lam { x: *x, body: Box::new(self.term(body)) }
+                Term::Lam { x: self.paramvar(*x), body: Box::new(self.term(body)) }
             },
             Term::UI => Term::UI,
             Term::Ref { var } => Term::Ref { var: *self.0.get(var).unwrap_or(var) },
             Term::DT { is_pi, param, cod } => {
-                Term::DT { is_pi: *is_pi, param: param.clone(), cod: Box::new(self.term(cod)) }
+                Term::DT { is_pi: *is_pi, param: self.param(param), cod: Box::new(self.term(cod)) }
             },
             Term::Two { is_app, f, a } => {
                 Term::Two { is_app: *is_app, f: Box::new(self.term(f)), a: Box::new(self.term(a)) }
@@ -116,5 +123,20 @@ impl Renamer {
             },
             Term::Error { msg } => Term::Error { msg: msg.clone() },
         }
+    }
+    fn param(&mut self, param: &ParamTerm) -> ParamTerm {
+        ParamTerm {
+            id: param.id,
+            ty: Box::new(self.term(&param.ty)),
+            loc: param.loc,
+        }
+    }
+    fn paramvar(&mut self, id: LocalVar) -> LocalVar {
+        let ret = LocalVar {
+            id: id.id + 114514,
+            name: id.name,
+        };
+        self.0.insert(id, ret);
+        ret
     }
 }
