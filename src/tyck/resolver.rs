@@ -28,6 +28,9 @@ pub struct Resolver {
 }
 
 impl Resolver {
+    fn param(&mut self, param: &Param) -> Result<Param, Error> {
+        Ok(Param(param.0.clone(), Box::new(self.expr(&param.1)?)))
+    }
     pub fn def(&mut self, def: &Decl) -> Result<Decl, Error> {
         let teles = self.tele(def)?;
         match def {
@@ -105,6 +108,7 @@ impl Resolver {
         match expr {
             Expr::Paren(x) => self.expr(x),
             Expr::Dt(is_pi, param, e) => {
+                let param = self.param(param)?;
                 self.env.insert(param.0.0.clone(), param.0.clone());
                 let body = self.expr(e)?;
                 self.env.remove(&param.0.0);

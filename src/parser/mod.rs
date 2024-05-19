@@ -88,21 +88,19 @@ fn cons_decl(s: Span) -> IResult<Span, ConsDecl> {
 
 fn expr(s: Span) -> IResult<Span, Expr> {
     alt((
-        map(tuple((expr_core, many1(expr_core))), |(e0, e1)| e1.into_iter()
-            .fold(e0, |e0, e1i| Expr::Two(Box::new(e0), Box::new(e1i)))),
-        map(tuple((expr_core, ws(tag(".1")))), |(expr, _)| Expr::Fst(Box::new(expr))),
-        map(tuple((expr_core, ws(tag(".2")))), |(expr, _)| Expr::Snd(Box::new(expr))),
-        map(tuple((expr_core, arrow, expr)), |(e0, _, e1)| Expr::Dt(
+        map(tuple((expr_core1, ws(tag(".1")))), |(expr, _)| Expr::Fst(Box::new(expr))),
+        map(tuple((expr_core1, ws(tag(".2")))), |(expr, _)| Expr::Snd(Box::new(expr))),
+        map(tuple((expr_core1, arrow, expr)), |(e0, _, e1)| Expr::Dt(
             true,
             Param(Id("_".to_owned(), Locate::default()), Box::new(e0)),
             Box::new(e1)
         )),
-        map(tuple((expr_core, times, expr)), |(e0, _, e1)| Expr::Dt(
+        map(tuple((expr_core1, times, expr)), |(e0, _, e1)| Expr::Dt(
             false,
             Param(Id("_".to_owned(), Locate::default()), Box::new(e0)),
             Box::new(e1)
         )),
-        expr_core,
+        expr_core1,
         /*map(many1(tuple((arrow, expr_core))), |v| ),
         map(many0(tuple((times, expr_core))), |v| if v.is_empty() {
             e0
@@ -110,6 +108,14 @@ fn expr(s: Span) -> IResult<Span, Expr> {
             v.into_iter()
 
         })*/
+    ))(s)
+}
+
+pub fn expr_core1(s: Span) -> IResult<Span, Expr> {
+    alt((
+        map(tuple((expr_core, many0(expr_core))), |(e0, e1)| e1.into_iter()
+            .fold(e0, |e0, e1i| Expr::Two(Box::new(e0), Box::new(e1i)))),
+        expr_core,
     ))(s)
 }
 
