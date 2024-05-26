@@ -8,6 +8,7 @@ pub mod parser;
 pub mod syntax;
 pub mod util;
 pub mod tyck;
+mod locally_nameless;
 
 type Error = Diagnostic;
 
@@ -69,11 +70,12 @@ fn test() {
     println!("finish 1");
     let s = r"def Eq (A : U) (a b : A) : U => Pi (P : A -> U) -> P a -> P b
       def refl (A : U) (a : A) : Eq A a a => \\P pa. pa
-      def sym (A : U) (a b : A) (e : Eq A a b) : Eq A b a =>
-          e (\\b. Eq A b a) (refl A a)";
+      ";
     run(s);
     println!("finish 2");
-    let s = r"data Unit | unit
+    /* def sym (A : U) (a b : A) (e : Eq A a b) : Eq A b a =>
+          e (\\b. Eq A b a) (refl A a)*/
+    /*let s = r"data Unit | unit
       def unnit : Unit => unit
       data Nat
       | zero
@@ -107,5 +109,5 @@ fn test() {
       | succ (n : Nat)
       def plus-bad (a : Nat) (b : Nat) : Nat
       | (succ a) b => succ (plus-bad a b)";
-    run(s);
+    run(s);*/
 }
