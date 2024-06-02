@@ -77,3 +77,34 @@ impl Term {
             })
     }
 }
+
+impl Term {
+    pub fn map_term_id<F>(&self, f: F) -> Term
+    where
+        F: Fn(u32) -> u32 + Copy,
+    {
+        match self {
+            Term::Error { msg } => Term::Error { msg: msg.clone() },
+            Term::Ref { var } => Term::Ref { var: LocalVar { id: f(var.id), name: var.name } },
+            Term::FnCall { fun, args } => todo!(),
+            Term::DataCall { fun, args } => todo!(),
+            Term::ConCall { fun, args } => todo!(),
+            Term::Two { is_app, f, a } => todo!(),
+            Term::Proj { t, is_one } => todo!(),
+            Term::Lam { x, body } => Term::Lam {
+                x: LocalVar { id: f(x.id), name: x.name },
+                body: Box::new(body.map_term_id(f)),
+            },
+            Term::DT { is_pi, param, cod } => Term::DT {
+                is_pi: *is_pi,
+                param: ParamTerm {
+                    id: LocalVar { id: f(param.id.id), name: param.id.name },
+                    ty: Box::new(param.ty.map_term_id(f)),
+                    loc: param.loc,
+                },
+                cod: Box::new(cod.map_term_id(f))
+            },
+            Term::UI => Term::UI,
+        }
+    }
+}

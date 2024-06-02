@@ -118,10 +118,26 @@ impl Elaborator {
                                 well_typed: Renamer(HashMap::new()).term(
                                     &telescope.iter()
                                         .map(|x| x.id)
+                                        .map(|x| LocalVar { id: x.id + 1145, name: x.name })
                                         .fold(
                                             Term::FnCall {
-                                                fun: name.clone(),
-                                                args: telescope.iter().map(|x| Term::Ref { var: x.id }).collect()
+                                                fun: Box::new(DefVar {
+                                                    core: name.core.clone(),
+                                                    signature: Signature {
+                                                        is_data: name.signature.is_data,
+                                                        telescope: name.signature.telescope.iter()
+                                                            .map(|x| ParamTerm {
+                                                                id: LocalVar { id: x.id.id + 1145, name: x.id.name },
+                                                                ty: Box::new(x.ty.map_term_id(|x| x + 1145)),
+                                                                loc: x.loc,
+                                                            }).collect(),
+                                                        result: name.signature.result.map_term_id(|x| x + 1145),
+                                                    },
+                                                    name: name.name.clone(),
+                                                }),
+                                                args: telescope.iter().map(|x| Term::Ref {
+                                                    var: LocalVar { id: x.id.id + 1145, name: x.id.name }
+                                                }).collect()
                                             },
                                             |x, s| {
                                                 Term::Lam { x: s, body: Box::new(x) }
@@ -130,8 +146,13 @@ impl Elaborator {
                                 ),
                                 ty: telescope.iter()
                                     .rev()
+                                    .map(|x| ParamTerm {
+                                        id: LocalVar { id: x.id.id + 1145, name: x.id.name },
+                                        ty: Box::new(x.ty.map_term_id(|x| x + 1145)),//TODO:
+                                        loc: x.loc.clone(),
+                                    })
                                     .fold(
-                                        result.clone(),
+                                        result.map_term_id(|x| x + 1145),
                                         |x, s| {
                                             Term::DT { is_pi: true, param: s.clone(), cod: Box::new(x) }
                                         }
