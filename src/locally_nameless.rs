@@ -106,15 +106,17 @@ fn open<A: std::hash::Hash + Eq + Clone>(image: &Term<Var<A>>, scope: &Term<Var<
     go(0, image, scope)
 }
 
-fn whnf<A: std::hash::Hash + Eq + Clone>(term: &Term<Var<A>>, vec: Vec<Term<Var<A>>>) -> Term<Var<A>> {
-    match (term, &vec[..]) {
-        (Term::App(l, r), v) => {
-            whnf(l, std::iter::once(*r.clone()).chain(v.iter().cloned()).collect())
+fn whnf<A: std::hash::Hash + Eq + Clone>(term: &Term<Var<A>>, mut vec: Vec<Term<Var<A>>>) -> Term<Var<A>> {
+    match term {
+        Term::App(l, r) => {
+            vec.push(*r.clone());
+            whnf(l, vec)
         },
-        (Term::Lam(_, body), [a, args @ ..]) => {
-            whnf(&open(a, body), args.to_vec())
+        Term::Lam(_, body) if !vec.is_empty() => {
+            let a = vec.pop().unwrap();
+            whnf(&open(&a, body), vec)
         },
-        (a, b) => b.iter().fold(a.clone(), |x, y| Term::App(Box::new(x), Box::new(y.clone())))
+        a => vec.iter().fold(a.clone(), |x, y| Term::App(Box::new(x), Box::new(y.clone())))
     }
 }
 

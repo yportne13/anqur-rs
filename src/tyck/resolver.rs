@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+/*use std::collections::HashMap;
 
 use crate::{parser::ast::{Decl, Expr, Id, Param, FnBody, Clause, Pattern, ConsDecl}, Error, Diagnostic};
 
@@ -32,14 +32,16 @@ impl Resolver {
         Ok(Param(param.0.clone(), Box::new(self.expr(&param.1)?)))
     }
     pub fn def(&mut self, def: &Decl) -> Result<Decl, Error> {
-        let teles = self.tele(def)?;
         match def {
-            Decl::Def { name, tele: _, result, body } => {
+            Decl::Def { name, tele, result, body } => {
                 self.env.insert(name.0.clone(), name.clone());
                 let result = self.expr(result)?;
                 let ret = Decl::Def {
                     name: name.clone(),
-                    tele: teles.0,
+                    tele: tele.iter()
+                        .for_each(|x| {
+                            x.0.0
+                        }),
                     result,
                     body: match body {
                         crate::parser::ast::FnBody::Expr(e) => FnBody::Expr(self.expr(e)?),
@@ -158,3 +160,4 @@ impl Resolver {
         }
     }
 }
+*/

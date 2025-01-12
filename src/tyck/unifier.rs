@@ -1,4 +1,4 @@
-use crate::{syntax::term::Term, Diagnostic};
+/*use crate::{syntax::term::Term, Diagnostic};
 
 pub fn untyped(l: &Term, r: &Term) -> Result<bool, Diagnostic> {
     match (l, r) {
@@ -54,3 +54,4 @@ fn unify_seq(l: &[Term], r: &[Term]) -> Result<bool, Diagnostic> {
     }
     Ok(ret)
 }
+*/

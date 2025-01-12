@@ -1,4 +1,4 @@
-use crate::parser::ast::{Param, Expr, Clause};
+/*use crate::parser::ast::{Param, Expr, Clause};
 
 use super::{term::{Term, ParamTerm}, defvar::DefVar};
 
@@ -35,3 +35,4 @@ pub struct Signature {
     pub telescope: Vec<ParamTerm>,
     pub result: Term,
 }
+*/

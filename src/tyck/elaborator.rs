@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::{Debug, Display}};
+/*use std::{collections::HashMap, fmt::{Debug, Display}};
 
 use crate::{parser::ast::{Decl, Expr, Param, Clause, Locate}, syntax::{def::{Def, Signature}, term::{Term, ParamTerm}, defvar::DefVar}, Error, Diagnostic};
 
@@ -390,3 +390,4 @@ impl Elaborator {
         Ok(Clause(clause.0.clone(), self.inherit(&clause.1, result)?))
     }
 }
+*/

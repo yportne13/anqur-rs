@@ -1,4 +1,4 @@
-use crate::parser::ast::Id;
+/*use crate::parser::ast::Id;
 
 use super::def::{Def, Signature};
 
@@ -10,3 +10,4 @@ pub struct DefVar {
     pub signature: Signature,
     pub name: String,
 }
+*/

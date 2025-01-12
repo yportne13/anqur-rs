@@ -1,4 +1,3 @@
-
 pub mod ast;
 
 use nom::{bytes::complete::*, combinator::*, error::{ErrorKind, make_error}, character::complete::multispace0, branch::alt, multi::{many1, many0}, sequence::tuple, Err};
@@ -6,11 +5,10 @@ use nom_greedyerror::GreedyError;
 
 use self::ast::{Locate, Id, Expr, Param, ConsDecl, Pattern, Clause, FnBody, Decl};
 
-
 pub type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 pub type IResult<'a, T, U> = nom::IResult<T, U, GreedyError<T, ErrorKind>>;
 
-pub fn parser(s: &str) -> Result<Vec<Decl>, String> {
+pub fn parser(s: &str) -> Result<Vec<Decl<String>>, String> {
     match program(Span::new(s)) {
         Ok(x) => if x.0.fragment().is_empty() {
             Ok(x.1)
@@ -22,7 +20,7 @@ pub fn parser(s: &str) -> Result<Vec<Decl>, String> {
 }
 
 /// program : decl+;
-fn program(s: Span) -> IResult<Span, Vec<Decl>> {
+fn program(s: Span) -> IResult<Span, Vec<Decl<String>>> {
     many1(decl)(s)
 }
 
@@ -31,10 +29,10 @@ fn program(s: Span) -> IResult<Span, Vec<Decl>> {
 /// | 'print' param* ':' expr ARROW2 expr # printDecl
 /// | 'data' ID param* consDecl* # dataDecl
 /// ;
-fn decl(s: Span) -> IResult<Span, Decl> {
+fn decl(s: Span) -> IResult<Span, Decl<String>> {
     alt((
         map(
-            tuple((ws(tag("def")), id, many0(param), ws(tag(":")), expr, fn_body)),
+            tuple((ws(tag("def")), id, many0(param), ws(tag(":")), expr, fn_body_expr)),
             |(_, name, tele, _, result, body)| Decl::Def{name, tele: tele.concat(), result, body}
         ),
         map(
@@ -48,8 +46,13 @@ fn decl(s: Span) -> IResult<Span, Decl> {
     ))(s)
 }
 
+/// fnBody : ARROW2 expr;
+fn fn_body_expr(s: Span) -> IResult<Span, Expr<String>> {
+    map(tuple((arrow2, expr)), |(_, expr)| expr)(s)
+}
+
 /// fnBody : ARROW2 expr | clause*;
-fn fn_body(s: Span) -> IResult<Span, FnBody> {
+fn fn_body(s: Span) -> IResult<Span, FnBody<String>> {
     alt((
         map(tuple((arrow2, expr)), |(_, expr)| FnBody::Expr(expr)),
         map(many0(clause), FnBody::Clause),
@@ -57,7 +60,7 @@ fn fn_body(s: Span) -> IResult<Span, FnBody> {
 }
 
 /// pattern : ID | '(' ID pattern* ')';
-fn pattern(s: Span) -> IResult<Span, Pattern> {
+fn pattern(s: Span) -> IResult<Span, Pattern<String>> {
     alt((
         map(id, Pattern::Id),
         map(tuple((
@@ -70,7 +73,7 @@ fn pattern(s: Span) -> IResult<Span, Pattern> {
 }
 
 /// clause : '|' pattern+ ARROW2 expr;
-fn clause(s: Span) -> IResult<Span, Clause<Expr>> {
+fn clause(s: Span) -> IResult<Span, Clause<String, Expr<String>>> {
     let (s, _) = ws(tag("|"))(s)?;
     let (s, patterns) = many1(pattern)(s)?;
     let (s, _) = arrow2(s)?;
@@ -78,7 +81,7 @@ fn clause(s: Span) -> IResult<Span, Clause<Expr>> {
     Ok((s, Clause(patterns, expr)))
 }
 
-fn cons_decl(s: Span) -> IResult<Span, ConsDecl> {
+fn cons_decl(s: Span) -> IResult<Span, ConsDecl<String>> {
     map(tuple((
         ws(tag("|")),
         id,
@@ -86,7 +89,7 @@ fn cons_decl(s: Span) -> IResult<Span, ConsDecl> {
     )), |(_, name, tele)| ConsDecl{name, tele: tele.concat()})(s)
 }
 
-fn expr(s: Span) -> IResult<Span, Expr> {
+fn expr(s: Span) -> IResult<Span, Expr<String>> {
     alt((
         map(tuple((expr_core1, ws(tag(".1")))), |(expr, _)| Expr::Fst(Box::new(expr))),
         map(tuple((expr_core1, ws(tag(".2")))), |(expr, _)| Expr::Snd(Box::new(expr))),
@@ -101,17 +104,10 @@ fn expr(s: Span) -> IResult<Span, Expr> {
             Box::new(e1)
         )),
         expr_core1,
-        /*map(many1(tuple((arrow, expr_core))), |v| ),
-        map(many0(tuple((times, expr_core))), |v| if v.is_empty() {
-            e0
-        } else {
-            v.into_iter()
-
-        })*/
     ))(s)
 }
 
-pub fn expr_core1(s: Span) -> IResult<Span, Expr> {
+pub fn expr_core1(s: Span) -> IResult<Span, Expr<String>> {
     alt((
         map(tuple((expr_core, many0(expr_core))), |(e0, e1)| e1.into_iter()
             .fold(e0, |e0, e1i| Expr::Two(Box::new(e0), Box::new(e1i)))),
@@ -119,7 +115,7 @@ pub fn expr_core1(s: Span) -> IResult<Span, Expr> {
     ))(s)
 }
 
-pub fn expr_core(s: Span) -> IResult<Span, Expr> {
+pub fn expr_core(s: Span) -> IResult<Span, Expr<String>> {
     alt((
         map(tuple((pi, param, arrow, expr)), |(_, param, _, expr)| {
             param.into_iter()
@@ -133,7 +129,7 @@ pub fn expr_core(s: Span) -> IResult<Span, Expr> {
             param.into_iter()
                 .fold(expr, |e, p| Expr::Lam(p, Box::new(e)))
         }),
-        map(tuple((ws(tag("<<")), expr, ws(tag(",")), expr, ws(tag(">>")))), |(_, e0, _, e1, _)| Expr::Pair(Box::new(e0), Box::new(e1))),
+        map(tuple((ws(tag("<<")), expr, ws(tag(",")), expr, ws(tag(">>")))), |(_, e0, _, e1, _)| Expr::App(Box::new(e0), Box::new(e1))),
         map(id, Expr::Ref),
         map(ws(tag("U")), |_| Expr::Univ),
         map(ws(tag("Type")), |_| Expr::Univ),
@@ -171,7 +167,7 @@ fn pi(s: Span) -> IResult<Span, ()> {
     Ok((s, ()))
 }
 
-fn param(s: Span) -> IResult<Span, Vec<Param>> {
+fn param(s: Span) -> IResult<Span, Vec<Param<String>>> {
     let (s, _) = ws(tag("("))(s)?;
     let (s, x) = many1(id)(s)?;
     let (s, _) = ws(tag(":"))(s)?;
@@ -180,8 +176,7 @@ fn param(s: Span) -> IResult<Span, Vec<Param>> {
     Ok((s, x.into_iter().map(|y| Param(y, Box::new(expr.clone()))).collect()))
 }
 
-pub fn id(s: Span) -> IResult<Span, Id> {
-    //TODO: '-'
+pub fn id(s: Span) -> IResult<Span, Id<String>> {
     let (s, a) = is_a("[~!@#$%^&*+=<>?/|abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")(s)?;
     let (s, b) = opt(is_a("[~!@#$%^&*+'-=<>?/|abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))(s)?;
     let (s, _) = multispace0(s)?;

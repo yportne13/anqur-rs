@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+/*use std::collections::HashMap;
 
 use crate::syntax::term::{ParamTerm, Term};
 
-use super::elaborator::LocalVar;
+//use super::elaborator::LocalVar;
 
 pub struct Normalizer(pub HashMap<LocalVar, Term>);
 
@@ -140,3 +140,4 @@ impl Renamer {
         ret
     }
 }
+*/

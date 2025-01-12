@@ -1,6 +1,6 @@
-use std::fmt::Debug;
+/*use std::fmt::Debug;
 
-use crate::{parser::ast::Locate, tyck::{normalizer::Normalizer, elaborator::LocalVar}};
+use crate::{parser::ast::Locate, tyck::{normalizer::Normalizer}};
 
 use super::defvar::DefVar;
 
@@ -108,3 +108,4 @@ impl Term {
         }
     }
 }
+*/
