@@ -1,8 +1,15 @@
 use std::rc::Rc;
+use std::fmt::{Debug, Formatter};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct List<T> {
     head: Link<T>,
+}
+
+impl<T: Debug> Debug for List<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
 }
 
 type Link<T> = Option<Rc<Node<T>>>;

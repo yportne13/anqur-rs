@@ -230,6 +230,7 @@ fn test() {
     let s = r"def uncurry (A B C : U)
         (t : A ** B) (f : A -> B -> C) : C => f (t.1) (t.2)
       def uncurry' (A : U) (t : A ** A) (f : A -> A -> A) : A => uncurry A A A t f";
+    println!("{:?}", parser(s).unwrap());
     println!("{}", parser(s).is_ok());
     let s = r"def Eq (A : U) (a b : A) : U => Pi (P : A -> U) -> P a -> P b
       def refl (A : U) (a : A) : Eq A a a => \\P pa. pa

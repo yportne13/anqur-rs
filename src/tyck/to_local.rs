@@ -12,10 +12,13 @@ pub enum Value {
     App(Box<Value>, Box<Value>),
     Lam(Id<String>, Closure),
     Pi(Id<String>, Box<Value>, Closure),
+    Sig(Box<Value>, Box<Value>),
     #[default]
     U,
     Two(Box<Value>, Box<Value>),
     Tuple(Box<Value>, Box<Value>),
+    Fst(Box<Value>),
+    Snd(Box<Value>),
 }
 
 #[derive(Debug, Clone)]
@@ -35,9 +38,10 @@ impl Closure {
 ///      | Lam tm'   -> VLam(env, tm')
 ///      | App(f, a) -> apply_val (eval env f) (eval env a)
 fn eval(env: List<Value>, tm: Expr<Lvl>) -> Value {
-    match tm { 
-        Expr::Ref(idx) => env.iter().nth(idx.0).unwrap().clone(),
-        Expr::App(f, a) => match (eval(env.clone(), *f), eval(env, *a)) {
+    println!("  eval on {:?} at\n  {:?}", tm, env);
+    match tm {
+        Expr::Ref(idx) => env.iter().nth(idx.0).expect(&format!("unexpected error: get ref {} failed", idx.0)).clone(),
+        Expr::App(f, a) | Expr::Two(f, a) => match (eval(env.clone(), *f), eval(env, *a)) {
             (Value::Lam(_, body), va) => eval(body.0.prepend(va), body.1),
             (vf, va) => Value::App(Box::new(vf), Box::new(va)),
         },
@@ -45,17 +49,16 @@ fn eval(env: List<Value>, tm: Expr<Lvl>) -> Value {
         Expr::Dt(is_pi, Param(name, term), term1) => if is_pi {
             Value::Pi(name, Box::new(eval(env.clone(), *term)), Closure(env, *term1))
         } else {
-            match (eval(env.clone(), *term), eval(env, *term1)) {
-                (Value::Lam(_, body), va) => eval(body.0.prepend(va), body.1),
-                (vf, va) => Value::App(Box::new(vf), Box::new(va)),
-            }
+            Value::Sig(Box::new(eval(env.clone(), *term)), Box::new(eval(env, *term1)))
+        },
+        Expr::Pair(a, b) => {
+            Value::Tuple(Box::new(eval(env.clone(), *a)), Box::new(eval(env, *b)))
         },
         Expr::Let(_, _, term1) => eval(env.clone(), *term1),
         Expr::Univ => Value::U,
-        Expr::Two(expr, expr1) => todo!(),
-        Expr::Fst(expr) => todo!(),
-        Expr::Snd(expr) => todo!(),
-        Expr::Paren(expr) => todo!(),
+        Expr::Fst(expr) => Value::Fst(Box::new(eval(env, *expr))),
+        Expr::Snd(expr) => Value::Snd(Box::new(eval(env, *expr))),
+        Expr::Paren(expr) => eval(env, *expr),
         Expr::Match(expr, vec) => todo!(),
     }
 }
@@ -90,16 +93,18 @@ fn quote(level: usize, value: Value) -> Expr<usize> {
                 )
             )
         ),*/
+        Value::Sig(a, b) => todo!(),
         Value::U => Expr::Univ,
         Value::Two(a, b) => Expr::Two(
             Box::new(quote(level, *a)),
             Box::new(quote(level, *b))
         ),
-        Value::Tuple(a, b) => Expr::Dt(
-            false,
-            Param(Id("_".to_owned(), Locate::default()), Box::new(quote(level, *a))),
-            Box::new(quote(level, *b))
-        )
+        Value::Tuple(a, b) => Expr::Pair(
+            Box::new(quote(level, *a)),
+            Box::new(quote(level, *b)),
+        ),
+        Value::Fst(a) => Expr::Fst(Box::new(quote(level, *a))),
+        Value::Snd(a) => Expr::Snd(Box::new(quote(level, *a))),
     }
 }
 
@@ -159,12 +164,10 @@ impl Cxt {
 
     // Extend Cxt with a definition
     pub fn define(&self, x: String, t: Value, a: Value) -> Self {
-        let env = List::new();
-        env.prepend(t);
         let mut types = self.types.clone();
         types.push((x, a));
         Cxt {
-            env,
+            env: self.env.prepend(t),
             types,
             lvl: self.lvl + 1,
             pos: self.pos,
@@ -172,31 +175,53 @@ impl Cxt {
     }
 }
 
-pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value), (String, usize)> {
+pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value, Cxt), (String, usize)> {
     match t {
         Decl::Def { name, tele, result, body } => {
             let mut ret_cxt = cxt.clone();
             let mut cxt = cxt.clone();
-            let tele = tele.iter().map(|x| {
+            let param: Vec<Param<usize>> = tele.iter().map(|x| {
+                    //println!(">>>> {}", x.0.0);
+                    //println!("<<<< {:?}", infer_expr(&cxt, &x.1));
                     let (typ, _) = infer_expr(&cxt, &x.1)?;
                     let vtyp = eval(cxt.env.clone(), typ.clone());
                     //let typ_tm = check(&cxt, &x.1, &Value::U)?;
                     //let vtyp = eval(cxt.env.clone(), typ_tm.clone());
-                    println!("tele: {} {:?} -> {:?}", x.0.0, x.1, vtyp);
-                    cxt = cxt.bind(x.0.clone(), vtyp);
+                    println!("tele: {} {:?} -->> {:?}\n\n", x.0.0, x.1, vtyp);
+                    //cxt = cxt.define(x.0.0.clone(), vtyp.clone(), vtyp);//TODO: last param may not vtyp
+                    cxt = cxt.bind(x.0.clone(), vtyp);//TODO: last param may not vtyp
                     Ok(Param(x.0.clone(), Box::new(typ)))
                 }).collect::<Result<_, _>>()?;
-            let result = check(&cxt, &result, &Value::U)?;
-            let ret_val = eval(cxt.env.clone(), result.clone());
-            let body = check(&cxt, body, &ret_val)?;
-            let vt = eval(cxt.env.clone(), body.clone());
+            let result_u = check(&cxt, &result, &Value::U)?;
+            let ret_val = eval(cxt.env.clone(), result_u.clone());
+            let body_u = check(&cxt, body, &ret_val)?;
+            let vt = eval(cxt.env.clone(), body_u.clone());
             //tele.iter().for_each(|x| cxt = cxt.bind(x.0, x.1));
+            let typ = tele.iter().rev()
+                .fold(result.clone(), |a, b| {
+                    Expr::Dt(true, b.clone(), Box::new(a))
+                });
+            let bod = tele.iter().rev()
+                .fold(body.clone(), |a, b| {
+                    Expr::Lam(b.0.clone(), Box::new(a))
+                });
+            {
+                let typ_tm = check(&ret_cxt, &typ, &Value::U)?;
+                let vtyp = eval(ret_cxt.env.clone(), typ_tm.clone());
+                println!("------------------->");
+                println!("{:?}", vtyp);
+                println!("-------------------<");
+                let t_tm = check(&ret_cxt, &bod, &vtyp)?;
+                println!("begin vt");
+                let vt = eval(ret_cxt.env.clone(), t_tm.clone());
+                ret_cxt = ret_cxt.define(name.0.clone(), vt, vtyp);
+            }
             Ok((Decl::Def {
                 name: name.clone(),
-                tele,
-                result,
-                body,
-            }, vt))//TODO:vt may be wrong
+                tele: param,
+                result: result_u,
+                body: body_u,
+            }, vt, ret_cxt))//TODO:vt may be wrong
         },
         Decl::Print { tele, result, body } => todo!(),
         Decl::Data { name, tele, cons } => todo!(),
@@ -206,8 +231,9 @@ pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value), (String,
 fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String, usize)> {
     match t {
         Expr::Ref(x) => {
-            for (i, (x_, a)) in cxt.types.iter().enumerate() {
+            for (i, (x_, a)) in cxt.types.iter().rev().enumerate() {
                 if &x.0 == x_ {
+                    println!("-----------------{}: {}  -- {:?}", x.0, i, a);
                     return Ok((Expr::Ref(Id(i, x.1)), a.clone()));
                 }
             }
@@ -235,6 +261,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
             let va = eval(cxt.env.clone(), a_tm.clone());
             let new_cxt = if name.0 != "_" {cxt.bind(name.clone(), va)} else {cxt.clone()};
             let b_tm = check(&new_cxt, b, &Value::U)?;
+            println!("{:?}  {:?}", b, b_tm);
             Ok((Expr::Dt(*is_pi, Param(name.clone(), Box::new(a_tm)), Box::new(b_tm)), Value::U))
         } else {
             //TODO:
@@ -242,6 +269,14 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
             let (expr1_tm, expr1_ty) = infer_expr(cxt, b)?;
             Ok((
                 Expr::Dt(*is_pi, Param(name.clone(), Box::new(expr_tm)), Box::new(expr1_tm)),
+                Value::U,
+            ))
+        },
+        Expr::Pair(a, b) => {
+            let (expr_tm, expr_ty) = infer_expr(cxt, a)?;
+            let (expr1_tm, expr1_ty) = infer_expr(cxt, b)?;
+            Ok((
+                Expr::Pair(Box::new(expr_tm), Box::new(expr1_tm)),
                 Value::Tuple(Box::new(expr_ty), Box::new(expr1_ty)),
             ))
         },
@@ -259,7 +294,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
         Expr::Fst(expr) => {
             let (expr_tm, expr_ty) = infer_expr(cxt, expr)?;
             match (expr_tm, expr_ty) {
-                (e, Value::Tuple(fst, _)) => Ok((
+                (e, Value::Sig(fst, _)) => Ok((
                     Expr::Fst(Box::new(e)),
                     *fst
                 )),
@@ -272,7 +307,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
         Expr::Snd(expr) => {
             let (expr_tm, expr_ty) = infer_expr(cxt, expr)?;
             match (expr_tm, expr_ty) {
-                (e, Value::Tuple(_, snd)) => Ok((
+                (e, Value::Sig(_, snd)) => Ok((
                     Expr::Snd(Box::new(e)),
                     *snd
                 )),
@@ -303,6 +338,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
 //   use check when the type is already known
 //   use infer if the type is unknown
 fn check(cxt: &Cxt, t: &Expr<String>, a: &Value) -> Result<Expr<Lvl>, (String, usize)> {
+    println!("#### {:?} == {:?}\n   in {:?}\n\n", t, a, cxt);
     match (t, a) {
         // Setting the source pos
         //(Raw::RSrcPos(pos, t), a) => check(&Cxt { pos: *pos, ..cxt.clone() }, t, a),

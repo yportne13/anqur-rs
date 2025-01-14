@@ -126,6 +126,8 @@ pub enum Expr<T> {
     //Pi(Param<T>, Box<Expr<T>>),
     //Sig(Param<T>, Box<Expr<T>>),
 
+    Pair(Box<Expr<T>>, Box<Expr<T>>),
+
     // Introduction lures
     Lam(Id<String>, Box<Expr<T>>),
     App(Box<Expr<T>>, Box<Expr<T>>),
@@ -147,6 +149,7 @@ impl<T> Expr<T> {
             Expr::Snd(a) => a.pos(),
             Expr::Univ => Locate::default(),//TODO:
             Expr::Dt(_, p, _) => p.0.1,
+            Expr::Pair(a, b) => a.pos() + b.pos(),
             Expr::Lam(id, _) => id.1,
             Expr::App(a, b) => a.pos() + b.pos(),
             Expr::Ref(id) => id.1,
