@@ -1,5 +1,7 @@
 use std::{collections::HashMap, ops::Add};
 
+use colored::Colorize;
+
 use crate::parser::ast::*;
 
 use super::list::List;
@@ -26,8 +28,8 @@ pub struct Closure (List<Value>, Expr<Lvl>);
 
 impl Closure {
     fn apply(self, arg: Value) -> Value {
-        let new_env = self.0;
-        new_env.prepend(arg);
+        let mut new_env = self.0;
+        new_env = new_env.prepend(arg);
         eval(new_env, self.1)
     }
 }
@@ -38,7 +40,7 @@ impl Closure {
 ///      | Lam tm'   -> VLam(env, tm')
 ///      | App(f, a) -> apply_val (eval env f) (eval env a)
 fn eval(env: List<Value>, tm: Expr<Lvl>) -> Value {
-    println!("  eval on {:?} at\n  {:?}", tm, env);
+    //println!("  {} on {:?} at\n  {:?}", "eval".red(), tm, env);
     match tm {
         Expr::Ref(idx) => env.iter().nth(idx.0).expect(&format!("unexpected error: get ref {} failed", idx.0)).clone(),
         Expr::App(f, a) | Expr::Two(f, a) => match (eval(env.clone(), *f), eval(env, *a)) {
@@ -187,7 +189,7 @@ pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value, Cxt), (St
                     let vtyp = eval(cxt.env.clone(), typ.clone());
                     //let typ_tm = check(&cxt, &x.1, &Value::U)?;
                     //let vtyp = eval(cxt.env.clone(), typ_tm.clone());
-                    println!("tele: {} {:?} -->> {:?}\n\n", x.0.0, x.1, vtyp);
+                    //println!("tele: {} {:?} -->> {:?}\n\n", x.0.0, x.1, vtyp);
                     //cxt = cxt.define(x.0.0.clone(), vtyp.clone(), vtyp);//TODO: last param may not vtyp
                     cxt = cxt.bind(x.0.clone(), vtyp);//TODO: last param may not vtyp
                     Ok(Param(x.0.clone(), Box::new(typ)))
@@ -208,11 +210,11 @@ pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value, Cxt), (St
             {
                 let typ_tm = check(&ret_cxt, &typ, &Value::U)?;
                 let vtyp = eval(ret_cxt.env.clone(), typ_tm.clone());
-                println!("------------------->");
-                println!("{:?}", vtyp);
-                println!("-------------------<");
+                //println!("------------------->");
+                //println!("{:?}", vtyp);
+                //println!("-------------------<");
                 let t_tm = check(&ret_cxt, &bod, &vtyp)?;
-                println!("begin vt");
+                //println!("begin vt {}", "------".green());
                 let vt = eval(ret_cxt.env.clone(), t_tm.clone());
                 ret_cxt = ret_cxt.define(name.0.clone(), vt, vtyp);
             }
@@ -233,7 +235,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
         Expr::Ref(x) => {
             for (i, (x_, a)) in cxt.types.iter().rev().enumerate() {
                 if &x.0 == x_ {
-                    println!("-----------------{}: {}  -- {:?}", x.0, i, a);
+                    //println!("-----------------{}: {}  -- {:?}", x.0, i, a);
                     return Ok((Expr::Ref(Id(i, x.1)), a.clone()));
                 }
             }
@@ -259,9 +261,10 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
         Expr::Dt(is_pi, Param(name, expr), b) => if *is_pi {
             let a_tm = check(cxt, expr, &Value::U)?;
             let va = eval(cxt.env.clone(), a_tm.clone());
-            let new_cxt = if name.0 != "_" {cxt.bind(name.clone(), va)} else {cxt.clone()};
+            //let new_cxt = if name.0 != "_" {cxt.bind(name.clone(), va)} else {cxt.clone()};
+            let new_cxt = cxt.bind(name.clone(), va);
             let b_tm = check(&new_cxt, b, &Value::U)?;
-            println!("{:?}  {:?}", b, b_tm);
+            //println!("{:?}  {:?}", b, b_tm);
             Ok((Expr::Dt(*is_pi, Param(name.clone(), Box::new(a_tm)), Box::new(b_tm)), Value::U))
         } else {
             //TODO:
@@ -338,7 +341,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
 //   use check when the type is already known
 //   use infer if the type is unknown
 fn check(cxt: &Cxt, t: &Expr<String>, a: &Value) -> Result<Expr<Lvl>, (String, usize)> {
-    println!("#### {:?} == {:?}\n   in {:?}\n\n", t, a, cxt);
+    //println!("#### {:?} == {:?}\n   in {:?}\n\n", t, a, cxt);
     match (t, a) {
         // Setting the source pos
         //(Raw::RSrcPos(pos, t), a) => check(&Cxt { pos: *pos, ..cxt.clone() }, t, a),
@@ -404,8 +407,9 @@ fn conv(l: Id<usize>, t: &Value, u: &Value) -> bool {
         }
         (Value::Lam(_, t), u) => conv(l + 1, &t.clone().apply(Value::Lvl(l)), &Value::App(Box::new(u.clone()), Box::new(Value::Lvl(l)))),
         (u, Value::Lam(_, t)) => conv(l + 1, &Value::App(Box::new(u.clone()), Box::new(Value::Lvl(l))), &t.clone().apply(Value::Lvl(l))),
-        (Value::Lvl(x), Value::Lvl(x_)) => x == x_,
+        (Value::Lvl(x), Value::Lvl(x_)) => x.0 == x_.0,
         (Value::App(t, u), Value::App(t_, u_)) => conv(l, t, t_) && conv(l, u, u_),
+        (Value::Sig(a, b), Value::Sig(c, d)) => conv(l, a, c) && conv(l, b, d),
         _ => false,
     }
 }
