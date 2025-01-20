@@ -122,11 +122,11 @@ pub fn expr_core(s: Span) -> IResult<Span, Expr<String>> {
                 .fold(expr, |e, p| Expr::Dt(true, p, Box::new(e)))
         }),
         map(tuple((sig, param, arrow, expr)), |(_, param, _, expr)| {
-            param.into_iter()
+            param.into_iter().rev()
                 .fold(expr, |e, p| Expr::Dt(false, p, Box::new(e)))
         }),
         map(tuple((lam, many1(id), ws(tag(".")), expr)), |(_, param, _, expr)| {
-            param.into_iter()
+            param.into_iter().rev()
                 .fold(expr, |e, p| Expr::Lam(p, Box::new(e)))
         }),
         map(tuple((ws(tag("<<")), expr, ws(tag(",")), expr, ws(tag(">>")))), |(_, e0, _, e1, _)| Expr::App(Box::new(e0), Box::new(e1))),

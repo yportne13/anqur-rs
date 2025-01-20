@@ -341,7 +341,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
 //   use check when the type is already known
 //   use infer if the type is unknown
 fn check(cxt: &Cxt, t: &Expr<String>, a: &Value) -> Result<Expr<Lvl>, (String, usize)> {
-    //println!("#### {:?} == {:?}\n   in {:?}\n\n", t, a, cxt);
+    //println!(" {} {:?} == {:?}\n   in {:?}\n\n", "check".red(), t, a, cxt);
     match (t, a) {
         // Setting the source pos
         //(Raw::RSrcPos(pos, t), a) => check(&Cxt { pos: *pos, ..cxt.clone() }, t, a),
