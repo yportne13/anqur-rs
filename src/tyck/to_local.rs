@@ -342,6 +342,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
 //   use infer if the type is unknown
 fn check(cxt: &Cxt, t: &Expr<String>, a: &Value) -> Result<Expr<Lvl>, (String, usize)> {
     //println!(" {} {:?} == {:?}\n   in {:?}\n\n", "check".red(), t, a, cxt);
+    let t = if let Expr::Paren(t) = t {t} else {t};//TODO:is this the right way?
     match (t, a) {
         // Setting the source pos
         //(Raw::RSrcPos(pos, t), a) => check(&Cxt { pos: *pos, ..cxt.clone() }, t, a),

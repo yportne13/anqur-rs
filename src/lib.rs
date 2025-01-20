@@ -89,9 +89,9 @@ fn test() {
     run(s);
     println!("finish 1");
     let s = r"def Eq (A : U) (a b : A) : U => Pi (P : A -> U) -> P a -> P b
-      def refl (A : U) (a : A) : Eq A a a => \\P pa. pa";
-      //def sym (A : U) (a b : A) (e : Eq A a b) : Eq A b a =>
-      //    e (\\b. Eq A b a) (refl A a)";
+      def refl (A : U) (a : A) : Eq A a a => \\P pa. pa
+      def sym (A : U) (a b : A) (e : Eq A a b) : Eq A b a =>
+          e (\\b. Eq A b a) (refl A a)";
     run(s);
     println!("finish 2");
     /*let s = r"data Unit | unit
