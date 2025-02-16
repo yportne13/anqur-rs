@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Add};
+use std::{collections::{BTreeMap, HashMap}, ops::Add};
 
 use colored::Colorize;
 
@@ -21,6 +21,7 @@ pub enum Value {
     Tuple(Box<Value>, Box<Value>),
     Fst(Box<Value>),
     Snd(Box<Value>),
+    Sum(BTreeMap<Id<String>, Vec<Value>>),
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +74,7 @@ fn eval(env: List<Value>, tm: Expr<Lvl>) -> Value {
         Expr::Snd(expr) => Value::Snd(Box::new(eval(env, *expr))),
         Expr::Paren(expr) => eval(env, *expr),
         Expr::Match(expr, vec) => todo!(),
+        Expr::Sum(x) => todo!(),
     }
 }
 
@@ -113,6 +115,11 @@ fn quote(level: usize, value: Value) -> Expr<usize> {
         Value::Tuple(a, b) => Expr::Pair(Box::new(quote(level, *a)), Box::new(quote(level, *b))),
         Value::Fst(a) => Expr::Fst(Box::new(quote(level, *a))),
         Value::Snd(a) => Expr::Snd(Box::new(quote(level, *a))),
+        Value::Sum(x) => Expr::Sum(
+            x.into_iter()
+                .map(|(k, v)| (k, v.into_iter().map(|x| quote(level, x)).collect()))
+                .collect()
+            ),
     }
 }
 
@@ -248,7 +255,35 @@ pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value, Cxt), (St
             )) //TODO:vt may be wrong
         }
         Decl::Print { tele, result, body } => todo!(),
-        Decl::Data { name, tele, cons } => todo!(),
+        Decl::Data { name, tele, cons } => {
+            let mut ret_cxt = cxt.clone();
+            let fake_cxt = cxt.clone();
+            fake_cxt.bind(name.clone(), Value::U);
+            let new_tele = vec![];//TODO
+            let checked: (Vec<_>, BTreeMap<_, _>) = cons.iter()
+                .map(|c| {
+                    let ret = c.tele.iter()
+                        .map(|x| infer_expr(&fake_cxt, x))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let tree = ret
+                        .iter()
+                        .map(|x| x.clone()).collect::<(Vec<Expr<usize>>, Vec<Value>)>();
+                    ret_cxt = ret_cxt.bind(c.name.clone(), Value::Sum(BTreeMap::from_iter(
+                        std::iter::once((c.name.clone(), tree.1.clone()))
+                    )));
+                    Ok((ConsDecl {
+                        name: c.name.clone(),
+                        tele: tree.0,
+                    }, (c.name.clone(), tree.1)))
+                }).collect::<Result<_, _>>()?;
+            //ret_cxt = ret_cxt.bind(name.clone(), Value::Sum(checked.1));
+            ret_cxt = ret_cxt.bind(name.clone(), Value::U);
+            Ok((
+                Decl::Data { name: name.clone(), tele: new_tele, cons: checked.0 },
+                Value::U,
+                ret_cxt,
+            ))
+        }
     }
 }
 
@@ -261,7 +296,7 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
                     return Ok((Expr::Ref(Id(i, x.1)), a.clone()));
                 }
             }
-            report(cxt, &format!("variable out of scope: {}", x.0))
+            report(cxt, &format!("variable out of scope: {} @ {}", x.0, x.1.offset))
         }
 
         Expr::Univ => Ok((Expr::Univ, Value::U)), // U : U rule
@@ -370,6 +405,16 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
                 Expr::Let(name.clone(), Box::new(typ_tm), Box::new(t_tm)),
                 vt,
             ))
+        }
+
+        Expr::Sum(x) =>{
+            let x = x.into_iter()
+                .map(|y| y.1.into_iter()
+                    .map(|z| infer_expr(cxt, z).map(|(t, _)| t))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(|t| (y.0.to_owned(), t))
+                ).collect::<Result<_, _>>()?;
+            Ok((Expr::Sum(x), Value::U))
         }
     }
 }

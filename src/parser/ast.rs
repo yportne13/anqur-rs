@@ -1,9 +1,9 @@
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param<T>(pub Id<String>, pub Box<Expr<T>>);
 
-#[derive(Copy, Clone, Default, Debug, PartialEq)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct Locate {
     pub offset: usize,
     pub line: u32,
@@ -94,16 +94,29 @@ pub struct Clause<T, U>(pub Vec<Pattern<T>>, pub U);
 
 #[derive(Debug, Clone)]
 pub struct ConsDecl<T> {
-    pub name: Id<T>,
-    pub tele: Vec<Param<T>>,
+    pub name: Id<String>,
+    //pub tele: Vec<Param<T>>,
+    pub tele: Vec<Expr<T>>,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Id<T>(pub T, pub Locate);
 
 impl<T: Debug> Debug for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Id \"{:?}\" @ offset {}, line {}, len: {}", self.0, self.1.offset, self.1.line, self.1.len)
+    }
+}
+
+impl<T: PartialOrd> PartialOrd for Id<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T: Ord> Ord for Id<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
     }
 }
 
@@ -139,6 +152,8 @@ pub enum Expr<T> {
     Match(Box<Expr<T>>, Vec<Clause<T, Expr<T>>>),
 
     Let(Id<String>, Box<Expr<T>>, Box<Expr<T>>),
+
+    Sum(BTreeMap<Id<String>, Vec<Expr<T>>>),
 }
 
 impl<T> Expr<T> {
@@ -156,6 +171,7 @@ impl<T> Expr<T> {
             Expr::Paren(a) => a.pos(),
             Expr::Match(a, b) => a.pos() + b.last().unwrap().1.pos(),
             Expr::Let(name, _, body) => name.1 + body.pos(),
+            Expr::Sum(x) => todo!(),
         }
     }
 }

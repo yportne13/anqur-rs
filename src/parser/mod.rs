@@ -85,8 +85,9 @@ fn cons_decl(s: Span) -> IResult<Span, ConsDecl<String>> {
     map(tuple((
         ws(tag("|")),
         id,
-        many0(param),
-    )), |(_, name, tele)| ConsDecl{name, tele: tele.concat()})(s)
+        //many0(param),
+        many0(expr),
+    )), |(_, name, tele)| ConsDecl{name, tele})(s)
 }
 
 fn expr(s: Span) -> IResult<Span, Expr<String>> {
