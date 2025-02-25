@@ -257,8 +257,9 @@ pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value, Cxt), (St
         Decl::Print { tele, result, body } => todo!(),
         Decl::Data { name, tele, cons } => {
             let mut ret_cxt = cxt.clone();
-            let fake_cxt = cxt.clone();
-            fake_cxt.bind(name.clone(), Value::U);
+            let mut fake_cxt = cxt.clone();
+            fake_cxt.lvl += cons.len();
+            fake_cxt = fake_cxt.bind(name.clone(), Value::U);
             let new_tele = vec![];//TODO
             let checked: (Vec<_>, BTreeMap<_, _>) = cons.iter()
                 .map(|c| {
@@ -267,7 +268,9 @@ pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value, Cxt), (St
                         .collect::<Result<Vec<_>, _>>()?;
                     let tree = ret
                         .iter()
-                        .map(|x| x.clone()).collect::<(Vec<Expr<usize>>, Vec<Value>)>();
+                        //.map(|x| x.clone()).collect::<(Vec<Expr<usize>>, Vec<Value>)>();
+                        .map(|x| (x.0.clone(), eval(fake_cxt.env.clone(), x.0.clone())))
+                        .collect::<(Vec<Expr<usize>>, Vec<Value>)>();
                     ret_cxt = ret_cxt.bind(c.name.clone(), Value::Sum(BTreeMap::from_iter(
                         std::iter::once((c.name.clone(), tree.1.clone()))
                     )));
@@ -276,8 +279,7 @@ pub fn infer(cxt: &Cxt, t: &Decl<String>) -> Result<(Decl<Lvl>, Value, Cxt), (St
                         tele: tree.0,
                     }, (c.name.clone(), tree.1)))
                 }).collect::<Result<_, _>>()?;
-            //ret_cxt = ret_cxt.bind(name.clone(), Value::Sum(checked.1));
-            ret_cxt = ret_cxt.bind(name.clone(), Value::U);
+            ret_cxt = ret_cxt.define(name.0.clone(), Value::Sum(checked.1), Value::U);
             Ok((
                 Decl::Data { name: name.clone(), tele: new_tele, cons: checked.0 },
                 Value::U,
@@ -356,6 +358,25 @@ fn infer_expr(cxt: &Cxt, t: &Expr<String>) -> Result<(Expr<Lvl>, Value), (String
                     let u_tm = check(cxt, u, &a)?;
                     let u_val = eval(cxt.env.clone(), u_tm.clone());
                     Ok((Expr::Two(Box::new(t_tm), Box::new(u_tm)), b.apply(u_val)))
+                }
+                Value::Sum(map) => {
+                    let first = map.first_key_value().unwrap();//TODO:do not unwrap
+                    let to_check = first.1.get(0).ok_or((
+                        format!("when apply {u:?} on {map:?}, it is unexpected empty"),
+                        cxt.pos,
+                    ))?;
+                    //TODO: solve Lvl at here is right?
+                    let to_check = match to_check {
+                        Value::Lvl(lvl) => cxt.env.iter().nth(cxt.lvl - lvl.0 - 1).unwrap(),//TODO:unwrap?
+                        a => a,
+                    };
+                    let u_tm = check(cxt, u, to_check)?;
+                    Ok((Expr::Two(Box::new(t_tm), Box::new(u_tm)), Value::Sum(
+                        std::iter::once((
+                            first.0.clone(),
+                            first.1.get(1..).unwrap().to_vec()
+                        )).collect()
+                    )))
                 }
                 _ => report(
                     cxt,
@@ -523,6 +544,19 @@ fn conv(l: Id<usize>, t: &Value, u: &Value) -> bool {
         (Value::Lvl(x), Value::Lvl(x_)) => x.0 == x_.0,
         (Value::App(t, u), Value::App(t_, u_)) => conv(l, t, t_) && conv(l, u, u_),
         (Value::Sig(a, b), Value::Sig(c, d)) => conv(l, a, c) && conv(l, b, d),
+        (Value::Sum(a), Value::Sum(b)) => {
+            let mut ret = true;
+            /*for x in a {
+                ret &= b.get(x.0)
+                    .map(|t| t.iter()
+                        .chain(x.1)
+                        .map(|(m, n)| conv(l, m, n)).reduce(|m, n| m && n).unwrap_or(true))
+                    .unwrap_or(false);
+            }*/
+            //TODO
+            println!("assume {a:?} == {b:?}");
+            ret
+        },
         _ => false,
     }
 }

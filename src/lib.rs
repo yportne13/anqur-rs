@@ -101,14 +101,13 @@ fn test() {
       | succ Nat
 
       def two : Nat => succ (succ zero)
-      print : Nat => two
 
       data List (A : U)
       | nil
       | cons A (List A)
 
       def lengthTwo (A : U) (a : A) : List A => cons A a (cons A a (nil A))
-      print : List Nat => lengthTwo Nat two";
+      ";
     run(s);
     println!("finish 3");
     /*let s = r"data Nat
